@@ -1495,6 +1495,13 @@ fn attachment_review(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> Option<bo
 /// Draws the composer and queues sends with the originating account and selected mentions.
 fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat, review_send: Option<bool>) {
     let palette = app.palette;
+    if let Ok(draft) = std::env::var("ZAPFAST_DIAG_DRAFT") {
+        let key = egui::Id::new("diag-draft-set");
+        if !ui.ctx().data(|d| d.get_temp::<bool>(key).unwrap_or(false)) {
+            app.composer = draft.replace("\\n", "\n");
+            ui.ctx().data_mut(|d| d.insert_temp(key, true));
+        }
+    }
     let shown = egui::Panel::bottom("composer")
         .show_separator_line(false)
         .frame(
@@ -1807,7 +1814,7 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat, review_send: Option<b
                         // Grow from one to six lines, then scroll. The height
                         // is this frame's draft, measured above, rather than
                         // the scroll area's memory of the last frame.
-                        egui::ScrollArea::vertical()
+                        let diag_scroll = egui::ScrollArea::vertical()
                             .id_salt("composer-scroll")
                             .max_height(text_height)
                             .min_scrolled_height(text_height)
@@ -1927,6 +1934,7 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat, review_send: Option<b
                                     ui.ctx().request_discard("composer height changed");
                                 }
                                 let response = output.response.response.clone().tab_stop(Stop::Composer);
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("diag-te"), response.rect));
                                 ui.ctx().accesskit_node_builder(response.id, |node| node.set_label("Message"));
                                 let keyboard_menu = response.has_focus()
                                     && ui.input_mut(|input| super::keys::take_exact(input, Modifiers::SHIFT, Key::F10));
@@ -2044,6 +2052,26 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat, review_send: Option<b
                                     response.request_focus();
                                 }
                             });
+                        if std::env::var_os("ZAPFAST_DIAG_COMPOSER").is_some() {
+                            let ctx = ui.ctx().clone();
+                            let font = theme::regular(BODY_SIZE);
+                            let row = ctx.fonts_mut(|f| f.row_height(&font));
+                            let hint = ui.painter().layout_no_wrap("Type a message".to_owned(), font.clone(), palette.text).size().y;
+                            let te = ctx.data(|d| d.get_temp::<Rect>(egui::Id::new("diag-te")));
+                            let line_txt = format!(
+                                "DIAG ppp={} line_height={line_height} fonts_row={row} hint_h={hint} text_height={text_height} row_height={row_height} line={line} field_margin={field_margin} top={top} bottom={bottom} ink_middle={ink_middle} scroll_inner={:?} scroll_content={:?} textedit={:?} lines={}",
+                                ctx.pixels_per_point(),
+                                diag_scroll.inner_rect,
+                                diag_scroll.content_size,
+                                te,
+                                app.composer.lines().count(),
+                            );
+                            let key = egui::Id::new("diag-last");
+                            if ctx.data(|d| d.get_temp::<String>(key)).as_deref() != Some(line_txt.as_str()) {
+                                eprintln!("{line_txt}");
+                                ctx.data_mut(|d| d.insert_temp(key, line_txt));
+                            }
+                        }
                         ui.add_space(bottom);
                         });
                     });
@@ -2085,7 +2113,9 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat, review_send: Option<b
                     } else {
                         Icon::Send
                     };
-                    if theme::circle_button(ui, icon_kind, button_width, fill, hover, icon, "Send")
+                    let diag_send = theme::circle_button(ui, icon_kind, button_width, fill, hover, icon, "Send");
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("diag-send"), diag_send.rect));
+                    if diag_send
                         .tab_stop(Stop::Send)
                         .clicked()
                     {
@@ -2097,6 +2127,15 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat, review_send: Option<b
                     );
                 });
             theme::focus_outline(ui, id, pill.response.rect, f32::from(COMPOSER_RADIUS));
+            if std::env::var_os("ZAPFAST_DIAG_COMPOSER").is_some() {
+                let send = ui.ctx().data(|d| d.get_temp::<Rect>(egui::Id::new("diag-send")));
+                let t = format!("DIAG pill={:?} send={:?} clip={:?}", pill.response.rect, send, ui.clip_rect());
+                let key = egui::Id::new("diag-last-pill");
+                if ui.ctx().data(|d| d.get_temp::<String>(key)).as_deref() != Some(t.as_str()) {
+                    eprintln!("{t}");
+                    ui.ctx().data_mut(|d| d.insert_temp(key, t));
+                }
+            }
             ui.ctx()
                 .data_mut(|data| data.insert_temp(composer_pill_id(), pill.response.rect));
             if (send_key || send_click)
