@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   app:
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -67,11 +67,11 @@ jobs:
         run: |
           mkdir -p dist
           bash packaging/macos/bundle.sh target/release/zapfast dist/ZapFast.app 0.0.0-test
-          ditto -c -k --keepParent dist/ZapFast.app "$RUNNER_TEMP/ZapFast-test-arm64.zip"
+          ditto -c -k --keepParent dist/ZapFast.app "$RUNNER_TEMP/ZapFast-test-intel.zip"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: zapfast-macos-test-${{ matrix.winit }}
           path: |
             ${{ runner.temp }}/zapfast-*
-            ${{ runner.temp }}/ZapFast-test-arm64.zip
+            ${{ runner.temp }}/ZapFast-test-intel.zip
