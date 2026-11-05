@@ -2059,12 +2059,13 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat, review_send: Option<b
                             let hint = ui.painter().layout_no_wrap("Type a message".to_owned(), font.clone(), palette.text).size().y;
                             let te = ctx.data(|d| d.get_temp::<Rect>(egui::Id::new("diag-te")));
                             let line_txt = format!(
-                                "DIAG ppp={} line_height={line_height} fonts_row={row} hint_h={hint} text_height={text_height} row_height={row_height} line={line} field_margin={field_margin} top={top} bottom={bottom} ink_middle={ink_middle} scroll_inner={:?} scroll_content={:?} textedit={:?} lines={}",
+                                "DIAG ppp={} line_height={line_height} fonts_row={row} hint_h={hint} text_height={text_height} row_height={row_height} line={line} field_margin={field_margin} top={top} bottom={bottom} ink_middle={ink_middle} scroll_inner={:?} scroll_content={:?} textedit={:?} lines={} composer={:?}",
                                 ctx.pixels_per_point(),
                                 diag_scroll.inner_rect,
                                 diag_scroll.content_size,
                                 te,
                                 app.composer.lines().count(),
+                                app.composer,
                             );
                             let key = egui::Id::new("diag-last");
                             if ctx.data(|d| d.get_temp::<String>(key)).as_deref() != Some(line_txt.as_str()) {

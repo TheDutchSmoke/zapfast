@@ -8,18 +8,50 @@ jobs:
   app:
     runs-on: macos-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        winit: [patched, upstream]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: jdx/mr-boxington-action@v1
         with:
           cache-generation: test-v1
-      - name: Point the lockfile at the patched winit
+      - name: Use upstream winit (control build)
+        if: matrix.winit == 'upstream'
+        run: sed -i '' 's#^winit = { git = "https://github.com/TheDutchSmoke/winit", rev = "[0-9a-f]*" }#winit = { git = "https://github.com/crmne/winit", rev = "59ebfb727b8c83fcd28f8ca59c3733e32b4b4e9b" }#' Cargo.toml && grep -n '^winit = { git' Cargo.toml
+      - name: Point the lockfile at the chosen winit
         run: cargo update -p winit
       - name: Build (release, with demo)
         run: mbx build --release --features demo
+      - name: Emoji picker test
+        timeout-minutes: 5
+        run: |
+          set -x
+          ZAPFAST_DIAG_COMPOSER=1 target/release/zapfast --demo --demo-size 1100x700 2> "$RUNNER_TEMP/zapfast-emoji.log" &
+          pid=$!
+          sleep 8
+          osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $pid) to true" || true
+          sleep 1
+          osascript -e 'tell application "System Events" to keystroke "test "' || true
+          sleep 1
+          osascript -e 'tell application "System Events" to key code 49 using {control down, command down}' || true
+          sleep 2
+          screencapture -x "$RUNNER_TEMP/zapfast-emoji-1-picker.png" || true
+          osascript -e 'tell application "System Events" to keystroke "grinning"' || true
+          sleep 2
+          screencapture -x "$RUNNER_TEMP/zapfast-emoji-2-search.png" || true
+          osascript -e 'tell application "System Events" to key code 36' || true
+          sleep 2
+          screencapture -x "$RUNNER_TEMP/zapfast-emoji-3-after.png" || true
+          kill $pid || true
+          sleep 1
+          echo "---- composer as the app saw it (last DIAG lines) ----"
+          grep -o 'composer=.*' "$RUNNER_TEMP/zapfast-emoji.log" | tail -3 || true
       - name: Shots
         timeout-minutes: 8
+        if: matrix.winit == 'patched'
         env:
           ZAPFAST_DIAG_COMPOSER: "1"
         run: |
@@ -31,6 +63,7 @@ jobs:
           shot empty env
           shot long env ZAPFAST_DIAG_DRAFT="Dit is een lang bericht dat over meerdere regels loopt zodat we kunnen zien hoe de verzendknop zich gedraagt wanneer het typveld groeit, met nog wat extra woorden erachter om het geheel minstens drie of vier regels hoog te maken in het venster 🤣🤣"
       - name: App bundle
+        if: matrix.winit == 'patched'
         run: |
           mkdir -p dist
           bash packaging/macos/bundle.sh target/release/zapfast dist/ZapFast.app 0.0.0-test
@@ -38,7 +71,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: zapfast-macos-test
+          name: zapfast-macos-test-${{ matrix.winit }}
           path: |
             ${{ runner.temp }}/zapfast-*
             ${{ runner.temp }}/ZapFast-test-arm64.zip
