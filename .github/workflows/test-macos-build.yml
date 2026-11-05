@@ -1,0 +1,44 @@
+name: test macOS build
+on:
+  push:
+    branches: ['test/**']
+permissions:
+  contents: read
+jobs:
+  app:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: jdx/mr-boxington-action@v1
+        with:
+          cache-generation: test-v1
+      - name: Point the lockfile at the patched winit
+        run: cargo update -p winit
+      - name: Build (release, with demo)
+        run: mbx build --release --features demo
+      - name: Shots
+        timeout-minutes: 8
+        env:
+          ZAPFAST_DIAG_COMPOSER: "1"
+        run: |
+          shot() {
+            name=$1; shift
+            "$@" target/release/zapfast --demo --demo-size 1100x700 --demo-shot "$RUNNER_TEMP/zapfast-$name.png" --demo-shot-delay 6000 2> "$RUNNER_TEMP/zapfast-$name.log" || true
+            grep DIAG "$RUNNER_TEMP/zapfast-$name.log" | tail -4 || true
+          }
+          shot empty env
+          shot long env ZAPFAST_DIAG_DRAFT="Dit is een lang bericht dat over meerdere regels loopt zodat we kunnen zien hoe de verzendknop zich gedraagt wanneer het typveld groeit, met nog wat extra woorden erachter om het geheel minstens drie of vier regels hoog te maken in het venster 🤣🤣"
+      - name: App bundle
+        run: |
+          mkdir -p dist
+          bash packaging/macos/bundle.sh target/release/zapfast dist/ZapFast.app 0.0.0-test
+          ditto -c -k --keepParent dist/ZapFast.app "$RUNNER_TEMP/ZapFast-test-arm64.zip"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: zapfast-macos-test
+          path: |
+            ${{ runner.temp }}/zapfast-*
+            ${{ runner.temp }}/ZapFast-test-arm64.zip
