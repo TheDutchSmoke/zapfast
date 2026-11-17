@@ -42,6 +42,11 @@ jobs:
           osascript -e 'tell application "System Events" to keystroke "grinning"' || true
           sleep 2
           screencapture -x "$RUNNER_TEMP/zapfast-emoji-2-search.png" || true
+          osascript -e 'tell application "System Events" to key code 125' || true
+          sleep 0.5
+          osascript -e 'tell application "System Events" to key code 124' || true
+          sleep 0.5
+          screencapture -x "$RUNNER_TEMP/zapfast-emoji-2b-selected.png" || true
           osascript -e 'tell application "System Events" to key code 36' || true
           sleep 2
           screencapture -x "$RUNNER_TEMP/zapfast-emoji-3-after.png" || true
